@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">DroidWalker</string>
+
+    <string name="app_main_dashboard">화면</string>
+    <string name="app_main_records">기록</string>
+
+    <string name="dashboard_step_format">%d 걸음</string>
+</resources>

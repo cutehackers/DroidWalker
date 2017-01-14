@@ -1,0 +1,44 @@
+apply plugin: 'com.android.application'
+
+ext {
+    COMPILE_SDK_VERSION = 25
+    BUILD_TOOLS_VERSION = "25.0.2"
+    MIN_SDK_VERSION = 15
+    TARGET_SDK_VERSION = 23
+    SUPPORT_LIBRARY_VERSION = "25.0.1"
+}
+
+android {
+    compileSdkVersion COMPILE_SDK_VERSION
+    buildToolsVersion BUILD_TOOLS_VERSION
+    defaultConfig {
+        applicationId "com.jhlee.android.droidwalker"
+        minSdkVersion MIN_SDK_VERSION
+        targetSdkVersion TARGET_SDK_VERSION
+        versionCode 1
+        versionName "1.0"
+        multiDexEnabled true
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+    testCompile 'junit:junit:4.12'
+    compile "com.android.support:appcompat-v7:$SUPPORT_LIBRARY_VERSION"
+    compile "com.android.support:support-v4:$SUPPORT_LIBRARY_VERSION"
+    compile "com.android.support:design:$SUPPORT_LIBRARY_VERSION"
+    compile 'com.android.support:multidex:1.0.1'
+    compile 'com.jakewharton.timber:timber:4.5.0'
+    compile 'io.reactivex:rxjava:1.2.5'
+    compile 'io.reactivex:rxandroid:1.2.1'
+}
