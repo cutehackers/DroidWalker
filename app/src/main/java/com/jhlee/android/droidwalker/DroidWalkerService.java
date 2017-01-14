@@ -1,5 +1,6 @@
 package com.jhlee.android.droidwalker;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Service;
 import android.content.Intent;
@@ -10,6 +11,7 @@ import android.hardware.SensorManager;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 
+import com.jhlee.android.droidwalker.database.DataBase;
 import com.jhlee.android.droidwalker.model.WalkData;
 import com.jhlee.android.droidwalker.ui.event.RxEventManager;
 
@@ -35,10 +37,7 @@ public class DroidWalkerService extends Service implements SensorEventListener {
     private int mSteps = 0;
     // Value of the step counter sensor when the listener was registered.
     // (Total steps are calculated from this value.)
-    private int mCounterSteps = 0;
-    // Steps counted by the step counter previously. Used to keep counter consistent across rotation
-    // changes
-    private int mPreviousCounterSteps = 0;
+    private int mCurrentSteps = 0;
 
     @Nullable
     @Override
@@ -49,11 +48,6 @@ public class DroidWalkerService extends Service implements SensorEventListener {
     @Override
     public void onCreate() {
         super.onCreate();
-        SensorManager sensorManager = (SensorManager) getSystemService(Activity.SENSOR_SERVICE);
-        mSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-
-        sensorManager.registerListener(this,
-                mSensor, SensorManager.SENSOR_DELAY_NORMAL, BATCH_LATENCY_0);
     }
 
     @Override
@@ -83,30 +77,42 @@ public class DroidWalkerService extends Service implements SensorEventListener {
         super.onTaskRemoved(rootIntent);
     }
 
+    @SuppressLint("CommitPrefEdits")
     @Override
     public void onSensorChanged(SensorEvent event) {
-
         /**
          * A step counter event contains the total number of steps since the listener
          * was first registered. We need to keep track of this initial value to calculate the
          * number of steps taken, as the first value a listener receives is undefined.
          */
-        if (mCounterSteps < 1) {
+        if (mCurrentSteps < 1) {
             // initial value
-            mCounterSteps = (int) event.values[0];
+            mCurrentSteps = (int) event.values[0];
         }
 
         // Calculate steps taken based on first counter value received.
-        mSteps = (int) event.values[0] - mCounterSteps;
+        mSteps = (int) event.values[0] - mCurrentSteps;
 
-        // Add the number of steps previously taken, otherwise the counter would start at 0.
-        // This is needed to keep the counter consistent across rotation changes.
-        mSteps = mSteps + mPreviousCounterSteps;
+        // update database
+        DataBase db = DataBase.instance();
+        long today = DataBase.getToday();
 
-        // post step information eventx
-        RxEventManager.instance().post(new WalkData(mCounterSteps + mSteps));
+        int todaySteps = db.getSteps(today);
+        if (todaySteps == -1) {
+            todaySteps = mSteps;
+            db.add(today, mSteps);
+        } else {
+            todaySteps += mSteps;
+            db.update(today, todaySteps);
+        }
+        db.close();
 
-        Timber.d("DroidWalkerService onSensorChanged() step: %d", mSteps);
+        // post step information event
+        RxEventManager.instance().post(new WalkData(todaySteps));
+
+        mCurrentSteps = (int) event.values[0];
+
+        Timber.d("DroidWalkerService onSensorChanged() step: %d, today: %s", todaySteps, DataBase.getTimeString(today));
     }
 
     @Override
@@ -114,11 +120,14 @@ public class DroidWalkerService extends Service implements SensorEventListener {
 
     }
 
+    /**
+     * 만보기 기록 시작
+     */
     private void setUpSensorEventListener() {
+        mCurrentSteps = 0;
+
         SensorManager sensorManager = (SensorManager) getSystemService(Activity.SENSOR_SERVICE);
         mSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-
-        mCounterSteps = 0;
 
         sensorManager.registerListener(this,
                 mSensor, SensorManager.SENSOR_DELAY_NORMAL, BATCH_LATENCY_0);

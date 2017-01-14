@@ -5,4 +5,6 @@
     <string name="app_main_records">기록</string>
 
     <string name="dashboard_step_format">%d 걸음</string>
+    <string name="dashboard_power_on">Start</string>
+    <string name="dashboard_power_off">Stop</string>
 </resources>

@@ -3,13 +3,11 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item
-        android:state_checked="false" >
-        <color android:color="@color/colorPrimaryDark"/>
-    </item>
+        android:state_checked="true"
+        android:drawable="@drawable/round_normal_background" />
 
     <item
-        android:state_checked="true" >
-        <color android:color="@color/colorAccent"/>
-    </item>
+        android:state_checked="false"
+        android:drawable="@drawable/round_accent_background" />
 
 </selector>

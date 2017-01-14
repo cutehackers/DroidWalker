@@ -9,7 +9,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import com.jhlee.android.droidwalker.AppCache;
 import com.jhlee.android.droidwalker.R;
+import com.jhlee.android.droidwalker.base.AndroidContext;
 import com.jhlee.android.droidwalker.model.DroidWalker;
 import com.jhlee.android.droidwalker.model.WalkData;
 import com.jhlee.android.droidwalker.ui.event.RxEventManager;
@@ -29,7 +31,8 @@ import rx.functions.Action1;
 public class WalkerDashBoardFragment extends Fragment implements View.OnClickListener {
 
     private TextView mStepView;
-    private CheckableImageButton mStartButton;
+    private CheckableImageButton mPowerButton;
+    private TextView mPowerText;
 
     private Subscription mWalkDataEventListener;
 
@@ -39,9 +42,18 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_walker_dashboard, container, false);
         mStepView = (TextView) view.findViewById(R.id.step_text);
-        mStartButton = (CheckableImageButton) view.findViewById(R.id.start_button);
-        mStartButton.setOnClickListener(this);
+        setUpPowerView(view);
         return view;
+    }
+
+    @Override
+    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+
+        // 액티비티가 생성되고 난후 이벤트 리스닝이 준비되면, 현재 상태에 따라 워커 서비스를 실행한다.
+        if (isWalkerEnabled()) {
+            RxEventManager.instance().post(new DroidWalker(true));
+        }
     }
 
     @Override
@@ -64,11 +76,12 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
 
     @Override
     public void onClick(View view) {
-        boolean isChecked = mStartButton.isChecked();
-        mStartButton.setChecked(!isChecked);
+        boolean enabled = !isWalkerEnabled();
 
         // 만보기 시작 혹은 종료 이벤트를 MainActivity에게 보낸다.
-        RxEventManager.instance().post(new DroidWalker(!isChecked));
+        RxEventManager.instance().post(new DroidWalker(enabled));
+        setWalkerEnabled(enabled);
+        setPowerChecked(enabled);
     }
 
 
@@ -96,5 +109,39 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
 
     private void setStepText(int steps) {
         mStepView.setText(String.format(getString(R.string.dashboard_step_format), steps));
+    }
+
+    /**
+     * 만보기 진행상태에 따른 버튼 상태 반영
+     */
+    private void setUpPowerView(View view) {
+        boolean enabled = isWalkerEnabled();
+
+        mPowerButton = (CheckableImageButton) view.findViewById(R.id.power_button);
+        mPowerButton.setOnClickListener(this);
+
+        mPowerText = (TextView) view.findViewById(R.id.power_text);
+        setPowerChecked(enabled);
+    }
+
+    private void setPowerChecked(boolean enabled) {
+        mPowerText.setText(enabled ? getString(R.string.dashboard_power_off) : getString(R.string.dashboard_power_on));
+        mPowerButton.setChecked(enabled);
+    }
+
+    /**
+     * 만보기가 동작중인지 여부s
+     */
+    private boolean isWalkerEnabled() {
+        return AndroidContext.instance().getSharedPreferences().getBoolean(AppCache.PREFS_WALKER_ENABLED, false);
+    }
+
+    /**
+     * 만보기가 진행중인지 멈추었는지 값을 설정한다.
+     */
+    private void setWalkerEnabled(boolean enabled) {
+        AndroidContext.instance().getSharedPreferences().edit()
+                .putBoolean(AppCache.PREFS_WALKER_ENABLED, enabled)
+                .apply();
     }
 }

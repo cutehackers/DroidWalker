@@ -1,6 +1,8 @@
 package com.jhlee.android.droidwalker.base;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.preference.Preference;
 
 import java.lang.ref.WeakReference;
 
@@ -31,5 +33,9 @@ public class AndroidContext {
 
     public Context get() {
         return mRefContext.get();
+    }
+
+    public SharedPreferences getSharedPreferences() {
+        return get().getSharedPreferences("walker_prefs", Context.MODE_PRIVATE);
     }
 }

@@ -26,7 +26,7 @@ import timber.log.Timber;
  * author Jun-hyoung, Lee
  */
 
-public class MainActivity extends AppCompatActivity implements ViewPager.OnPageChangeListener {
+public class MainActivity extends AppCompatActivity {
 
     private ViewPager mViewPager;
     private TabLayout mTabLayout;
@@ -52,7 +52,6 @@ public class MainActivity extends AppCompatActivity implements ViewPager.OnPageC
 
         mViewPager = (ViewPager) findViewById(R.id.pager);
         mViewPager.setAdapter(new MyPagerAdapter(getSupportFragmentManager()));
-        mViewPager.addOnPageChangeListener(this);
 
         mTabLayout = (TabLayout) findViewById(R.id.tablayout);
         mTabLayout.setupWithViewPager(mViewPager);
@@ -76,27 +75,6 @@ public class MainActivity extends AppCompatActivity implements ViewPager.OnPageC
     protected void onDestroy() {
         super.onDestroy();
         releaseEventListener();
-    }
-
-
-    //
-    //----------------------------------------------------------------------------------------------
-    // -- implements ViewPager.OnPageChangeListener
-    //
-
-    @Override
-    public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-
-    }
-
-    @Override
-    public void onPageSelected(int position) {
-
-    }
-
-    @Override
-    public void onPageScrollStateChanged(int state) {
-
     }
 
 
@@ -126,7 +104,6 @@ public class MainActivity extends AppCompatActivity implements ViewPager.OnPageC
             mDroidWalkerEventListener.unsubscribe();
         }
     }
-
 
     /**
      * 메인 페이지 프라그먼트 어댑터
@@ -169,8 +146,8 @@ public class MainActivity extends AppCompatActivity implements ViewPager.OnPageC
         static final int TYPE_DASHBOARD = 0;
         static final int TYPE_RECORD = 1;
 
-        String title;
-        int type;
+        final String title;
+        final int type;
 
         PageCreator(String title, int type) {
             this.title = title;
