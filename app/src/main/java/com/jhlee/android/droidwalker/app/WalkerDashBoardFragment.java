@@ -1,9 +1,14 @@
 package com.jhlee.android.droidwalker.app;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.design.widget.CheckableImageButton;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
+import android.support.v4.content.ContextCompat;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,12 +18,25 @@ import com.jhlee.android.droidwalker.AppCache;
 import com.jhlee.android.droidwalker.R;
 import com.jhlee.android.droidwalker.base.AndroidContext;
 import com.jhlee.android.droidwalker.database.DataBase;
-import com.jhlee.android.droidwalker.model.DroidWalker;
-import com.jhlee.android.droidwalker.model.WalkData;
+import com.jhlee.android.droidwalker.model.DroidWalkerPower;
+import com.jhlee.android.droidwalker.model.Item;
+import com.jhlee.android.droidwalker.model.Placemark;
+import com.jhlee.android.droidwalker.model.WalkSet;
+import com.jhlee.android.droidwalker.network.FetchAddressRestCommand;
+import com.jhlee.android.droidwalker.ui.event.PermissionGrantedEvent;
 import com.jhlee.android.droidwalker.ui.event.RxEventManager;
+import com.nhn.android.maps.NMapLocationManager;
+import com.nhn.android.maps.maplib.NGeoPoint;
 
+import java.util.Objects;
+
+import rx.Subscriber;
 import rx.Subscription;
+import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
+import rx.schedulers.Schedulers;
+import rx.subscriptions.CompositeSubscription;
+import timber.log.Timber;
 
 /**
  * DroidWalker
@@ -29,23 +47,39 @@ import rx.functions.Action1;
  * author Jun-hyoung, Lee
  */
 
-public class WalkerDashBoardFragment extends Fragment implements View.OnClickListener {
+public class WalkerDashBoardFragment extends Fragment implements View.OnClickListener,
+        NMapLocationManager.OnLocationChangeListener {
 
+    private TextView mDistanceView;
     private TextView mStepView;
+    private TextView mAddressView;
     private CheckableImageButton mPowerButton;
+
     private TextView mPowerText;
 
-    private Subscription mWalkDataEventListener;
+    private NMapLocationManager mLocationManager;
+    private CompositeSubscription mSubscription;
 
+    private boolean isFetchingAddress;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setUpEventListener();
+        mLocationManager = new NMapLocationManager(getContext());
+        mLocationManager.setOnLocationChangeListener(this);
+    }
 
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_walker_dashboard, container, false);
         mStepView = (TextView) view.findViewById(R.id.step_text);
+        mDistanceView = (TextView) view.findViewById(R.id.distance_text);
+        mAddressView = (TextView) view.findViewById(R.id.address_text);
         setUpPowerView(view);
 
-        fetchSteps();
+        fetch();
         return view;
     }
 
@@ -55,22 +89,35 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
 
         // 액티비티가 생성되고 난후 이벤트 리스닝이 준비되면, 현재 상태에 따라 워커 서비스를 실행한다.
         if (isWalkerEnabled()) {
-            RxEventManager.instance().post(new DroidWalker(true));
+            RxEventManager.instance().post(new DroidWalkerPower(true));
+        }
+
+        if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            mLocationManager.enableMyLocation(true);
+            setAddressText(getString(R.string.dashboard_fetching_address));
         }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        setUpEventListener();
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        releaseEventListener();
+        if (mLocationManager.isMyLocationEnabled()) {
+            mLocationManager.disableMyLocation();
+        }
     }
 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        releaseEventListener();
+        mLocationManager.removeOnLocationChangeListener(this);
+    }
 
     //
     //----------------------------------------------------------------------------------------------
@@ -79,12 +126,82 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
 
     @Override
     public void onClick(View view) {
-        boolean enabled = !isWalkerEnabled();
+        Timber.d("WalkDashBoard checkSelfPermission() ");
 
-        // 만보기 시작 혹은 종료 이벤트를 MainActivity에게 보낸다.
-        RxEventManager.instance().post(new DroidWalker(enabled));
-        setWalkerEnabled(enabled);
-        setPowerChecked(enabled);
+        if (((MainActivity) getActivity()).checkGpsReady()) {
+            toggleWalker();
+        }
+
+
+//        boolean enabled = !isWalkerEnabled();
+//
+//        // 만보기 시작 혹은 종료 이벤트를 MainActivity에게 보낸다.
+//        RxEventManager.instance().post(new DroidWalkerPower(enabled));
+//        setWalkerEnabled(enabled);
+//        setPowerChecked(enabled);
+        //toggleWalker();
+    }
+
+
+    //
+    //----------------------------------------------------------------------------------------------
+    // -- implements NMapLocationManager.OnLocationChangeListener
+    //
+
+    @Override
+    public boolean onLocationChanged(NMapLocationManager nMapLocationManager, NGeoPoint nGeoPoint) {
+        // 현재 위치 변경 시 호출된다. myLocation 객체에 변경된 좌표가 전달된다.
+        // 현재 위치를 계속 탐색하려면 true를 반환한다.
+
+        new FetchAddressRestCommand()
+                .longitude(nGeoPoint.getLongitude())
+                .latitude(nGeoPoint.getLatitude())
+                .build()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Subscriber<Placemark>() {
+                    @Override
+                    public void onStart() {
+                        isFetchingAddress = true;
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                        isFetchingAddress = false;
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        Timber.e("Naver map error fetching address. %s", e.getMessage());
+                        isFetchingAddress = false;
+                    }
+
+                    @Override
+                    public void onNext(Placemark placemark) {
+
+                        Timber.d("Naver map success code. %d", placemark.getCode());
+                        if (placemark.getResult().getTotal() > 0) {
+                            Item item = placemark.getResult().getItems().get(0);
+                            Timber.d("Naver map success fetching address: %s", item.getAddress());
+                            setAddressText(item.getAddress());
+                        } else {
+                            Timber.d("Naver map success but no address.");
+                        }
+                    }
+                });
+
+        Timber.d("Naver map location changed %s", nGeoPoint.toString());
+        return false;
+    }
+
+    @Override
+    public void onLocationUpdateTimeout(NMapLocationManager nMapLocationManager) {
+        Timber.e("Naver map location updateSteps timeout.");
+    }
+
+    @Override
+    public void onLocationUnavailableArea(NMapLocationManager nMapLocationManager, NGeoPoint nGeoPoint) {
+
     }
 
 
@@ -96,18 +213,39 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
     private void setUpEventListener() {
         releaseEventListener();
 
-        mWalkDataEventListener = RxEventManager.instance().subscribe(WalkData.class, new Action1<WalkData>() {
+        mSubscription = new CompositeSubscription();
+        mSubscription.add(RxEventManager.instance().subscribe(WalkSet.class, new Action1<WalkSet>() {
             @Override
-            public void call(WalkData walkData) {
-                setStepText(walkData.getSteps());
+            public void call(WalkSet walkSet) {
+                setStepText(walkSet.getSteps());
+                setDistanceText(walkSet.getDistance());
             }
-        });
+        }));
+
+        mSubscription.add(RxEventManager.instance().subscribe(PermissionGrantedEvent.class,
+                new Action1<PermissionGrantedEvent>() {
+                    @Override
+                    public void call(PermissionGrantedEvent event) {
+                        if (Manifest.permission.ACCESS_FINE_LOCATION.equals(event.getPermissions())) {
+                            toggleWalker();
+                        }
+                    }
+                }));
     }
 
     private void releaseEventListener() {
-        if (mWalkDataEventListener != null && !mWalkDataEventListener.isUnsubscribed()) {
-            mWalkDataEventListener.unsubscribe();
+        if (mSubscription != null && !mSubscription.isUnsubscribed()) {
+            mSubscription.unsubscribe();
         }
+    }
+
+    private void toggleWalker() {
+        boolean enabled = !isWalkerEnabled();
+
+        // 만보기 시작 혹은 종료 이벤트를 MainActivity에게 보낸다.
+        RxEventManager.instance().post(new DroidWalkerPower(enabled));
+        setWalkerEnabled(enabled);
+        setPowerChecked(enabled);
     }
 
     /**
@@ -118,7 +256,25 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
     }
 
     /**
-     * 만보기 진행상태에 따른 버튼 상태 반영
+     * 현재 이동 거리 표시
+     * @param distance 이동 거리 미터.
+     */
+    private void setDistanceText(int distance) {
+        String text = "0 m";
+        if (distance < 1000) {
+            text = String.format(getString(R.string.dashboard_distance_m_format), distance);
+        } else if (distance >= 1000) {
+            text = String.format(getString(R.string.dashboard_distance_km_format), (float)distance/1000);
+        }
+        mDistanceView.setText(text);
+    }
+
+    private void setAddressText(String address) {
+        mAddressView.setText(address);
+    }
+
+    /**
+     * 만보기 진행상태에 따른 버튼 파워 상태 반영
      */
     private void setUpPowerView(View view) {
         boolean enabled = isWalkerEnabled();
@@ -154,12 +310,15 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
     /**
      * 데이터 베이스에 저장된 걸음 수를 표시한다.
      */
-    private void fetchSteps() {
+    private void fetch() {
         DataBase db = DataBase.instance();
         long today = DataBase.getToday();
 
-        int todaySteps = db.getSteps(today);
-        setStepText((todaySteps == -1) ? 0 : todaySteps);
+        WalkSet walkSet = db.getWalkSet(today);
+        setStepText((walkSet == null) ? 0 : walkSet.getSteps());
+        setDistanceText((walkSet == null) ? 0 : walkSet.getDistance());
+
         db.close();
     }
+
 }

@@ -10,10 +10,12 @@ public class DailyWalkSet {
 
     private long date;
     private int steps;
+    private int distance;
 
-    public DailyWalkSet(long date, int steps) {
+    public DailyWalkSet(long date, int steps, int distance) {
         this.date = date;
         this.steps = steps;
+        this.distance = distance;
     }
 
     public long getDate() {
@@ -22,6 +24,10 @@ public class DailyWalkSet {
 
     public int getSteps() {
         return steps;
+    }
+
+    public int getDistance() {
+        return distance;
     }
 
 }

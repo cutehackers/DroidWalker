@@ -16,6 +16,8 @@ import com.jhlee.android.droidwalker.base.AndroidContext;
 import com.jhlee.android.droidwalker.database.DataBase;
 import com.jhlee.android.droidwalker.model.DailyWalkSet;
 
+import org.w3c.dom.Text;
+
 import java.util.List;
 
 import rx.Observable;
@@ -116,19 +118,25 @@ public class WalkerRecordsFragment extends Fragment {
         public static class ViewHolder extends RecyclerView.ViewHolder {
             private final TextView dateView;
             private final TextView stepView;
+            private final TextView distView;
 
             public ViewHolder(View v) {
                 super(v);
                 dateView = (TextView) v.findViewById(R.id.date);
                 stepView = (TextView) v.findViewById(R.id.step);
+                distView = (TextView) v.findViewById(R.id.distance);
             }
 
-            public void setDateView(long date) {
+            void setDateView(long date) {
                 dateView.setText(DataBase.getTimeString(date));
             }
 
-            public void setStepView(String stepText) {
+            void setStepView(String stepText) {
                 stepView.setText(stepText);
+            }
+
+            void setDistanceView(String distanceText) {
+                distView.setText(distanceText);
             }
         }
 
@@ -148,6 +156,15 @@ public class WalkerRecordsFragment extends Fragment {
             DailyWalkSet dataSet = dailyWalkSets.get(position);
             holder.setDateView(dataSet.getDate());
             holder.setStepView(String.format(context.getString(R.string.dashboard_step_format), dataSet.getSteps()));
+
+            String text = "0 m";
+            int distance = dataSet.getDistance();
+            if (distance < 1000) {
+                text = String.format(context.getString(R.string.dashboard_distance_m_format), distance);
+            } else if (distance >= 1000) {
+                text = String.format(context.getString(R.string.dashboard_distance_km_format), (float)distance/1000);
+            }
+            holder.setDistanceView(text);
         }
 
         @Override

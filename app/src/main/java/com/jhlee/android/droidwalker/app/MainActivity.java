@@ -1,18 +1,25 @@
 package com.jhlee.android.droidwalker.app;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.design.widget.Snackbar;
 import android.support.design.widget.TabLayout;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.view.View;
 
 import com.jhlee.android.droidwalker.DroidWalkerService;
 import com.jhlee.android.droidwalker.R;
-import com.jhlee.android.droidwalker.model.DroidWalker;
+import com.jhlee.android.droidwalker.model.DroidWalkerPower;
+import com.jhlee.android.droidwalker.ui.event.PermissionGrantedEvent;
 import com.jhlee.android.droidwalker.ui.event.RxEventManager;
 
 import rx.Subscription;
@@ -28,6 +35,9 @@ import timber.log.Timber;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int RC_HANDLE_PERMISSION_LOCATION = 0X0101;
+
+    private View mRoot;
     private ViewPager mViewPager;
     private TabLayout mTabLayout;
     private PageCreator[] mPageCreators;
@@ -44,6 +54,8 @@ public class MainActivity extends AppCompatActivity {
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        mRoot = findViewById(R.id.activity_main);
 
         mPageCreators = new PageCreator[] {
                 new PageCreator(getString(R.string.app_main_dashboard), PageCreator.TYPE_DASHBOARD),
@@ -77,6 +89,22 @@ public class MainActivity extends AppCompatActivity {
         releaseEventListener();
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode == RC_HANDLE_PERMISSION_LOCATION) {
+
+            if (verifyPermissions(grantResults)) {
+                // Camera permission has been granted, preview can be displayed
+                RxEventManager.instance().post(new PermissionGrantedEvent(Manifest.permission.ACCESS_FINE_LOCATION));
+
+            } else {
+                Snackbar.make(mRoot, R.string.permissions_not_granted, Snackbar.LENGTH_SHORT).show();
+            }
+
+        } else {
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+    }
 
     //
     //----------------------------------------------------------------------------------------------
@@ -86,10 +114,11 @@ public class MainActivity extends AppCompatActivity {
     private void setUpEventListener() {
         releaseEventListener();
 
-        mDroidWalkerEventListener = RxEventManager.instance().subscribe(DroidWalker.class,
-                new Action1<DroidWalker>() {
+        // 만보기 시작 멈춤 이벤트 핸들러
+        mDroidWalkerEventListener = RxEventManager.instance().subscribe(DroidWalkerPower.class,
+                new Action1<DroidWalkerPower>() {
                     @Override
-                    public void call(DroidWalker walker) {
+                    public void call(DroidWalkerPower walker) {
                         if (walker.enable()) {
                             startService(mDroidWalkerService);
                         } else {
@@ -104,6 +133,59 @@ public class MainActivity extends AppCompatActivity {
             mDroidWalkerEventListener.unsubscribe();
         }
     }
+
+    boolean checkGpsReady() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            // location permission has not been granted.
+            requestGpsPermission();
+            return false;
+
+        } else {
+
+            return true;
+        }
+    }
+
+    private void requestGpsPermission() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)) {
+            // Provide an additional rationale to the user if the permission was not granted
+            // and the user would benefit from additional context for the use of the permission.
+            // For example if the user has previously denied the permission.
+            Snackbar.make(mRoot, R.string.app_main_permission, Snackbar.LENGTH_INDEFINITE)
+                    .setAction(R.string.app_ok, new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION},
+                                    RC_HANDLE_PERMISSION_LOCATION);
+                        }
+                    }).show();
+        } else {
+
+            ActivityCompat.requestPermissions(this, new String[]{ Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION},
+                    RC_HANDLE_PERMISSION_LOCATION);
+        }
+    }
+
+    public static boolean verifyPermissions(int[] grantResults) {
+        // At least one result must be checked.
+        if(grantResults.length < 1){
+            return false;
+        }
+
+        // Verify that each required permission has been granted, otherwise return false.
+        for (int result : grantResults) {
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
 
     /**
      * 메인 페이지 프라그먼트 어댑터

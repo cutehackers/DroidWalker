@@ -7,10 +7,10 @@ package com.jhlee.android.droidwalker.model;
  * author Jun-hyoung, Lee
  */
 
-public class DroidWalker {
+public class DroidWalkerPower {
     private boolean enable;
 
-    public DroidWalker(boolean enable) {
+    public DroidWalkerPower(boolean enable) {
         this.enable = enable;
     }
 

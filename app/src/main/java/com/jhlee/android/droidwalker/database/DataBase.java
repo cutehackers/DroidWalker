@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 import com.jhlee.android.droidwalker.base.AndroidContext;
 import com.jhlee.android.droidwalker.model.DailyWalkSet;
+import com.jhlee.android.droidwalker.model.WalkSet;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ public class DataBase extends SQLiteOpenHelper {
 
     private static final String KEY_DATE = "date";
     private static final String KEY_STEPS = "steps";
+    private static final String KEY_DISTANCE = "distance";
 
     private static DataBase sInstance;
 
@@ -44,7 +46,7 @@ public class DataBase extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE " + DB_NAME + " (date INTEGER, steps INTEGER)");
+        db.execSQL("CREATE TABLE " + DB_NAME + " (date INTEGER, steps INTEGER, distance INTEGER)");
     }
 
     @Override
@@ -52,7 +54,7 @@ public class DataBase extends SQLiteOpenHelper {
 
     }
 
-    public void add(long date, int steps) {
+    public void add(long date, int steps, int distance) {
         getWritableDatabase().beginTransaction();
 
         try {
@@ -62,6 +64,7 @@ public class DataBase extends SQLiteOpenHelper {
                 ContentValues values = new ContentValues();
                 values.put(KEY_DATE, date);
                 values.put(KEY_STEPS, steps);
+                values.put(KEY_DISTANCE, distance);
                 getWritableDatabase().insert(DB_NAME, null, values);
             }
             cursor.close();
@@ -72,7 +75,7 @@ public class DataBase extends SQLiteOpenHelper {
         }
     }
 
-    public void update(long date, int steps) {
+    public void updateSteps(long date, int steps) {
         ContentValues values = new ContentValues();
         values.put(KEY_STEPS, steps);
         getWritableDatabase().update(DB_NAME, values, KEY_DATE + " = ?", new String[]{String.valueOf(date)});
@@ -89,9 +92,39 @@ public class DataBase extends SQLiteOpenHelper {
         return steps;
     }
 
+    public WalkSet getWalkSet(long date) {
+        Cursor cursor = getReadableDatabase().query(DB_NAME, new String[]{KEY_STEPS, KEY_DISTANCE}, "date = ?",
+                new String[]{String.valueOf(date)}, null, null, null);
+        cursor.moveToFirst();
+
+        WalkSet walkSet = null;
+        if (cursor.getCount() > 0) {
+            walkSet = new WalkSet(cursor.getInt(0), cursor.getInt(1), null /*not used*/);
+        }
+        return walkSet;
+    }
+
+
+    public void updateDistance(long date, int distance) {
+        ContentValues values = new ContentValues();
+        values.put(KEY_DISTANCE, distance);
+        getWritableDatabase().update(DB_NAME, values, KEY_DATE + " = ?", new String[]{String.valueOf(date)});
+    }
+
+    public int getDistance(long date) {
+        Cursor cursor = getReadableDatabase().query(DB_NAME, new String[]{KEY_DISTANCE}, "date = ?",
+                new String[]{String.valueOf(date)}, null, null, null);
+        cursor.moveToFirst();
+
+        int distance = (cursor.getCount() == 0) ? -1 : cursor.getInt(0);
+
+        cursor.close();
+        return distance;
+    }
+
     public List<DailyWalkSet> getRecords() {
         List<DailyWalkSet> data = new ArrayList<>();
-        Cursor cursor = getReadableDatabase().query(DB_NAME, new String[]{KEY_DATE, KEY_STEPS}, null, null, null, null, null);
+        Cursor cursor = getReadableDatabase().query(DB_NAME, new String[]{KEY_DATE, KEY_STEPS, KEY_DISTANCE}, null, null, null, null, null);
         if (cursor == null) {
             return data;
         }
@@ -99,7 +132,8 @@ public class DataBase extends SQLiteOpenHelper {
         while (cursor.moveToNext()) {
             DailyWalkSet dataSet = new DailyWalkSet(
                     cursor.getLong(cursor.getColumnIndex(KEY_DATE)),
-                    cursor.getInt(cursor.getColumnIndex(KEY_STEPS))
+                    cursor.getInt(cursor.getColumnIndex(KEY_STEPS)),
+                    cursor.getInt(cursor.getColumnIndex(KEY_DISTANCE))
             );
             data.add(dataSet);
         }

@@ -12,8 +12,10 @@ import android.os.IBinder;
 import android.support.annotation.Nullable;
 
 import com.jhlee.android.droidwalker.database.DataBase;
-import com.jhlee.android.droidwalker.model.WalkData;
+import com.jhlee.android.droidwalker.model.WalkSet;
 import com.jhlee.android.droidwalker.ui.event.RxEventManager;
+import com.nhn.android.maps.NMapLocationManager;
+import com.nhn.android.maps.maplib.NGeoPoint;
 
 import timber.log.Timber;
 
@@ -24,7 +26,8 @@ import timber.log.Timber;
  * author Jun-hyoung, Lee
  */
 
-public class DroidWalkerService extends Service implements SensorEventListener {
+public class DroidWalkerService extends Service implements SensorEventListener,
+        NMapLocationManager.OnLocationChangeListener {
 
     Sensor mSensor;
 
@@ -39,6 +42,12 @@ public class DroidWalkerService extends Service implements SensorEventListener {
     // (Total steps are calculated from this value.)
     private int mCurrentSteps = 0;
 
+    private NMapLocationManager mLocationManager;
+
+    private NGeoPoint mCurrentLocation;
+    private int mTodayDistance;
+
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -48,11 +57,16 @@ public class DroidWalkerService extends Service implements SensorEventListener {
     @Override
     public void onCreate() {
         super.onCreate();
+        setUpLocationManager();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         setUpSensorEventListener();
+        if (!mLocationManager.isMyLocationEnabled()) {
+            mLocationManager.enableMyLocation(true);
+        }
+
         Timber.i("DroidWalkerService onStartCommand() with id: %d", startId);
 
         // We want this service to continue running until it is explicitly
@@ -63,7 +77,10 @@ public class DroidWalkerService extends Service implements SensorEventListener {
     @Override
     public void onDestroy() {
         super.onDestroy();
+
         disposeSensorEventListener();
+        disposeLocationManager();
+
         Timber.i("DroidWalkerService onDestroy()");
     }
 
@@ -93,22 +110,22 @@ public class DroidWalkerService extends Service implements SensorEventListener {
         // Calculate steps taken based on first counter value received.
         mSteps = (int) event.values[0] - mCurrentSteps;
 
-        // update database
+        // updateSteps step from database
         DataBase db = DataBase.instance();
         long today = DataBase.getToday();
 
         int todaySteps = db.getSteps(today);
         if (todaySteps == -1) {
             todaySteps = mSteps;
-            db.add(today, mSteps);
+            db.add(today, mSteps, 0);
         } else {
             todaySteps += mSteps;
-            db.update(today, todaySteps);
+            db.updateSteps(today, todaySteps);
         }
         db.close();
 
-        // post step information event
-        RxEventManager.instance().post(new WalkData(todaySteps));
+        // post step information event to MainActivity listener
+        RxEventManager.instance().post(new WalkSet(todaySteps, mTodayDistance, mCurrentLocation));
 
         mCurrentSteps = (int) event.values[0];
 
@@ -119,6 +136,58 @@ public class DroidWalkerService extends Service implements SensorEventListener {
     public void onAccuracyChanged(Sensor sensor, int i) {
 
     }
+
+
+    //
+    //----------------------------------------------------------------------------------------------
+    // -- implements NMapLocationManager.OnLocationChangeListener
+    //
+
+    @Override
+    public boolean onLocationChanged(NMapLocationManager nMapLocationManager, NGeoPoint nGeoPoint) {
+        if (nGeoPoint == null) {
+            return true;
+        }
+
+        if (mCurrentLocation != null) {
+            double distance = NGeoPoint.getDistance(mCurrentLocation, nGeoPoint);
+            if (distance > 0) {
+                // update distance from database.
+                DataBase db = DataBase.instance();
+                long today = DataBase.getToday();
+
+                int todayDistance = db.getDistance(today);
+                if (todayDistance == -1) {
+                    mTodayDistance = 0;
+                    db.add(today, 0, 0);
+                } else {
+                    if (!mLocationManager.isMyLocationFixed()) {
+                        todayDistance += distance;
+                        mTodayDistance = todayDistance;
+                        db.updateDistance(today, todayDistance);
+                    }
+                }
+                db.close();
+            }
+        }
+        mCurrentLocation = nGeoPoint;
+
+        // 현재 위치 변경 시 호출된다. myLocation 객체에 변경된 좌표가 전달된다.
+        // 현재 위치를 계속 탐색하려면 true를 반환한다.
+        Timber.e("Naver map service location changed.");
+        return true;
+    }
+
+    @Override
+    public void onLocationUpdateTimeout(NMapLocationManager nMapLocationManager) {
+        Timber.e("Naver map service  location updateSteps timeout.");
+    }
+
+    @Override
+    public void onLocationUnavailableArea(NMapLocationManager nMapLocationManager, NGeoPoint nGeoPoint) {
+        Timber.e("Naver map service  location unavailable area.");
+    }
+
 
     /**
      * 만보기 기록 시작
@@ -136,5 +205,23 @@ public class DroidWalkerService extends Service implements SensorEventListener {
     private void disposeSensorEventListener() {
         SensorManager sensorManager = (SensorManager) getSystemService(Activity.SENSOR_SERVICE);
         sensorManager.unregisterListener(this);
+    }
+
+    private void setUpLocationManager() {
+        mLocationManager = new NMapLocationManager(this);
+        mLocationManager.setOnLocationChangeListener(this);
+
+        DataBase db = DataBase.instance();
+        long today = DataBase.getToday();
+        int distance = db.getDistance(today);
+        mTodayDistance = (distance == -1) ? 0 : distance;
+        db.close();
+    }
+
+    private void disposeLocationManager() {
+        if (mLocationManager.isMyLocationEnabled()) {
+            mLocationManager.disableMyLocation();
+        }
+        mLocationManager.removeOnLocationChangeListener(this);
     }
 }
