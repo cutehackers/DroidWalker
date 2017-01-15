@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 
+import com.jhlee.android.droidwalker.base.AndroidContext;
 import com.jhlee.android.droidwalker.database.DataBase;
 import com.jhlee.android.droidwalker.model.WalkSet;
 import com.jhlee.android.droidwalker.ui.event.RxEventManager;
@@ -66,11 +67,20 @@ public class DroidWalkerService extends Service implements SensorEventListener,
         setUpLocationManager();
     }
 
+    @SuppressLint("CommitPrefEdits")
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         setUpSensorEventListener();
-        if (!mLocationManager.isMyLocationEnabled()) {
-            mLocationManager.enableMyLocation(true);
+        try {
+            if (!mLocationManager.isMyLocationEnabled()) {
+                mLocationManager.enableMyLocation(true);
+            }
+        } catch (Exception e) {
+            AndroidContext.instance().getSharedPreferences().edit()
+                    .putBoolean(AppCache.PREFS_WALKER_ENABLED, false)
+                    .commit();
+            stopSelf();
+            return START_NOT_STICKY;
         }
 
         Timber.i("DroidWalkerService onStartCommand() with id: %d", startId);
