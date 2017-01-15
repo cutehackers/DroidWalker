@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mini_widget_layout"
+    android:layout_width="320dp"
+    android:layout_height="wrap_content">
+
+    <android.support.design.widget.CheckableImageButton
+        android:id="@+id/close_button"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:src="@drawable/close_48"
+        android:background="@android:color/transparent"/>
+
+    <LinearLayout
+        android:id="@+id/dashboard_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/close_button"
+        android:layout_centerHorizontal="true"
+        android:orientation="vertical"
+        android:background="@android:color/darker_gray">
+        <TextView
+            android:id="@+id/step_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:textSize="48sp"/>
+        <TextView
+            android:id="@+id/distance_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:textSize="42sp"/>
+    </LinearLayout>
+
+</RelativeLayout>

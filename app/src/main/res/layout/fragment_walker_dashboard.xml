@@ -28,6 +28,28 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:textSize="42sp"/>
+
+            <FrameLayout
+                android:id="@+id/allow_mini_container"
+                android:layout_width="128dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="16dp">
+                <android.support.design.widget.CheckableImageButton
+                    android:id="@+id/allow_mini_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/selector_toogle_button"/>
+
+                <TextView
+                    android:id="@+id/mini_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textColor="@android:color/white"
+                    android:textSize="20sp"
+                    android:text="@string/dashboard_mini_on"/>
+            </FrameLayout>
         </LinearLayout>
 
         <LinearLayout

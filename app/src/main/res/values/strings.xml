@@ -13,6 +13,7 @@
     <string name="dashboard_distance_km_format">%.1f Km</string>
     <string name="dashboard_power_on">Start</string>
     <string name="dashboard_power_off">Stop</string>
+    <string name="dashboard_mini_on">미니뷰 허용</string>
     <string name="dashboard_my_location">현재 위치</string>
     <string name="dashboard_fetching_address">주소 가져오는 중</string>
 </resources>

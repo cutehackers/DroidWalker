@@ -3,7 +3,10 @@ package com.jhlee.android.droidwalker.app;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.design.widget.TabLayout;
@@ -36,6 +39,7 @@ import timber.log.Timber;
 public class MainActivity extends AppCompatActivity {
 
     private static final int RC_HANDLE_PERMISSION_LOCATION = 0X0101;
+    private static final int RC_HANDLE_PERMISSION_DRAW_OVER = 0X0102;
 
     private View mRoot;
     private ViewPager mViewPager;
@@ -70,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
 
         mDroidWalkerService = new Intent(this, DroidWalkerService.class);
         setUpEventListener();
+
         Timber.d("MainActivity onCreate()");
     }
 
@@ -90,9 +95,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == RC_HANDLE_PERMISSION_DRAW_OVER) {
+
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == RC_HANDLE_PERMISSION_LOCATION) {
-
             if (verifyPermissions(grantResults)) {
                 // Camera permission has been granted, preview can be displayed
                 RxEventManager.instance().post(new PermissionGrantedEvent(Manifest.permission.ACCESS_FINE_LOCATION));
@@ -144,6 +157,16 @@ public class MainActivity extends AppCompatActivity {
         } else {
 
             return true;
+        }
+    }
+
+    void checkDrawOverReady() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            //If the draw over permission is not available open the settings screen
+            //to grant the permission.
+            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            startActivityForResult(intent, RC_HANDLE_PERMISSION_DRAW_OVER);
         }
     }
 

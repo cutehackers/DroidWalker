@@ -1,12 +1,14 @@
 package com.jhlee.android.droidwalker.app;
 
 import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
+import android.provider.Settings;
 import android.support.annotation.Nullable;
 import android.support.design.widget.CheckableImageButton;
-import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
 import android.view.LayoutInflater;
@@ -16,6 +18,7 @@ import android.widget.TextView;
 
 import com.jhlee.android.droidwalker.AppCache;
 import com.jhlee.android.droidwalker.R;
+import com.jhlee.android.droidwalker.WalkerMiniWidgetService;
 import com.jhlee.android.droidwalker.base.AndroidContext;
 import com.jhlee.android.droidwalker.database.DataBase;
 import com.jhlee.android.droidwalker.model.DroidWalkerPower;
@@ -28,10 +31,7 @@ import com.jhlee.android.droidwalker.ui.event.RxEventManager;
 import com.nhn.android.maps.NMapLocationManager;
 import com.nhn.android.maps.maplib.NGeoPoint;
 
-import java.util.Objects;
-
 import rx.Subscriber;
-import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
 import rx.schedulers.Schedulers;
@@ -54,6 +54,8 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
     private TextView mStepView;
     private TextView mAddressView;
     private CheckableImageButton mPowerButton;
+    private View mAllowMiniContainer;
+    private CheckableImageButton mAllowMiniButton;
 
     private TextView mPowerText;
 
@@ -78,6 +80,7 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
         mDistanceView = (TextView) view.findViewById(R.id.distance_text);
         mAddressView = (TextView) view.findViewById(R.id.address_text);
         setUpPowerView(view);
+        setUpAllowMiniView(view);
 
         fetch();
         return view;
@@ -102,13 +105,28 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
     @Override
     public void onResume() {
         super.onResume();
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            setMiniViewChecked(false);
+        } else {
+            setMiniViewChecked(!Settings.canDrawOverlays(getActivity()));
+        }
+
+        // close mini view if floating.
+        Activity activity = getActivity();
+        Intent service = new Intent(activity, WalkerMiniWidgetService.class);
+        service.putExtra("action", WalkerMiniWidgetService.ACTION_PAUSE);
+        activity.startService(service);
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        if (mLocationManager.isMyLocationEnabled()) {
-            mLocationManager.disableMyLocation();
+
+        // 미니뷰 보여준다.
+        if (isWalkerEnabled() && canDrawOverlays()) {
+            Activity activity = getActivity();
+            activity.startService(new Intent(activity, WalkerMiniWidgetService.class));
         }
     }
 
@@ -128,18 +146,22 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
     public void onClick(View view) {
         Timber.d("WalkDashBoard checkSelfPermission() ");
 
-        if (((MainActivity) getActivity()).checkGpsReady()) {
-            toggleWalker();
+        final int id = view.getId();
+        switch (id) {
+            case R.id.power_button: {
+                if (((MainActivity) getActivity()).checkGpsReady()) {
+                    toggleWalker();
+                }
+                break;
+            }
+
+            case R.id.allow_mini_button: {
+                ((MainActivity) getActivity()).checkDrawOverReady();
+                break;
+            }
         }
 
 
-//        boolean enabled = !isWalkerEnabled();
-//
-//        // 만보기 시작 혹은 종료 이벤트를 MainActivity에게 보낸다.
-//        RxEventManager.instance().post(new DroidWalkerPower(enabled));
-//        setWalkerEnabled(enabled);
-//        setPowerChecked(enabled);
-        //toggleWalker();
     }
 
 
@@ -178,7 +200,6 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
 
                     @Override
                     public void onNext(Placemark placemark) {
-
                         Timber.d("Naver map success code. %d", placemark.getCode());
                         if (placemark.getResult().getTotal() > 0) {
                             Item item = placemark.getResult().getItems().get(0);
@@ -194,6 +215,45 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
         return false;
     }
 
+    private void fetchAddress(NGeoPoint nGeoPoint) {
+        new FetchAddressRestCommand()
+                .longitude(nGeoPoint.getLongitude())
+                .latitude(nGeoPoint.getLatitude())
+                .build()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Subscriber<Placemark>() {
+                    @Override
+                    public void onStart() {
+                        isFetchingAddress = true;
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                        isFetchingAddress = false;
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        Timber.e("Naver map error fetching address. %s", e.getMessage());
+                        isFetchingAddress = false;
+                    }
+
+                    @Override
+                    public void onNext(Placemark placemark) {
+
+                        Timber.d("Naver map success code. %d", placemark.getCode());
+                        if (placemark.getResult().getTotal() > 0) {
+                            Item item = placemark.getResult().getItems().get(0);
+                            Timber.d("Naver map success fetching address: %s", item.getAddress());
+                            setAddressText(item.getAddress());
+                        } else {
+                            Timber.d("Naver map success but no address.");
+                        }
+                    }
+                });
+    }
+
     @Override
     public void onLocationUpdateTimeout(NMapLocationManager nMapLocationManager) {
         Timber.e("Naver map location updateSteps timeout.");
@@ -201,13 +261,13 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
 
     @Override
     public void onLocationUnavailableArea(NMapLocationManager nMapLocationManager, NGeoPoint nGeoPoint) {
-
+        Timber.e("Naver map location unavailable area.");
     }
 
 
     //
     //----------------------------------------------------------------------------------------------
-    // -- methods
+    //-- methods
     //
 
     private void setUpEventListener() {
@@ -219,6 +279,10 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
             public void call(WalkSet walkSet) {
                 setStepText(walkSet.getSteps());
                 setDistanceText(walkSet.getDistance());
+
+                if (!isFetchingAddress && walkSet.getLocation() != null) {
+                    fetchAddress(walkSet.getLocation());
+                }
             }
         }));
 
@@ -291,6 +355,22 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
         mPowerButton.setChecked(enabled);
     }
 
+    private void setUpAllowMiniView(View view) {
+        mAllowMiniContainer = view.findViewById(R.id.allow_mini_container);
+        mAllowMiniButton = (CheckableImageButton) view.findViewById(R.id.allow_mini_button);
+        mAllowMiniButton.setOnClickListener(this);
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            mAllowMiniContainer.setEnabled(false);
+        } else {
+            mAllowMiniContainer.setEnabled(!Settings.canDrawOverlays(getActivity()));
+        }
+    }
+
+    private void setMiniViewChecked(boolean enabled) {
+        mAllowMiniContainer.setVisibility(enabled ? View.VISIBLE : View.GONE);
+    }
+
     /**
      * 만보기가 동작중인지 여부s
      */
@@ -319,6 +399,14 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
         setDistanceText((walkSet == null) ? 0 : walkSet.getDistance());
 
         db.close();
+    }
+
+    private boolean canDrawOverlays() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        } else {
+            return Settings.canDrawOverlays(getActivity());
+        }
     }
 
 }
