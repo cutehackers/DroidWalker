@@ -12,6 +12,7 @@ import android.widget.TextView;
 import com.jhlee.android.droidwalker.AppCache;
 import com.jhlee.android.droidwalker.R;
 import com.jhlee.android.droidwalker.base.AndroidContext;
+import com.jhlee.android.droidwalker.database.DataBase;
 import com.jhlee.android.droidwalker.model.DroidWalker;
 import com.jhlee.android.droidwalker.model.WalkData;
 import com.jhlee.android.droidwalker.ui.event.RxEventManager;
@@ -43,6 +44,8 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
         View view = inflater.inflate(R.layout.fragment_walker_dashboard, container, false);
         mStepView = (TextView) view.findViewById(R.id.step_text);
         setUpPowerView(view);
+
+        fetchSteps();
         return view;
     }
 
@@ -107,6 +110,9 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
         }
     }
 
+    /**
+     * 현재 걸음 수 텍스트로 표시
+     */
     private void setStepText(int steps) {
         mStepView.setText(String.format(getString(R.string.dashboard_step_format), steps));
     }
@@ -143,5 +149,17 @@ public class WalkerDashBoardFragment extends Fragment implements View.OnClickLis
         AndroidContext.instance().getSharedPreferences().edit()
                 .putBoolean(AppCache.PREFS_WALKER_ENABLED, enabled)
                 .apply();
+    }
+
+    /**
+     * 데이터 베이스에 저장된 걸음 수를 표시한다.
+     */
+    private void fetchSteps() {
+        DataBase db = DataBase.instance();
+        long today = DataBase.getToday();
+
+        int todaySteps = db.getSteps(today);
+        setStepText((todaySteps == -1) ? 0 : todaySteps);
+        db.close();
     }
 }

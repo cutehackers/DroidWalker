@@ -7,9 +7,12 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import com.jhlee.android.droidwalker.base.AndroidContext;
+import com.jhlee.android.droidwalker.model.DailyWalkSet;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 
 /**
  * DroidWalker
@@ -86,6 +89,25 @@ public class DataBase extends SQLiteOpenHelper {
         return steps;
     }
 
+    public List<DailyWalkSet> getRecords() {
+        List<DailyWalkSet> data = new ArrayList<>();
+        Cursor cursor = getReadableDatabase().query(DB_NAME, new String[]{KEY_DATE, KEY_STEPS}, null, null, null, null, null);
+        if (cursor == null) {
+            return data;
+        }
+
+        while (cursor.moveToNext()) {
+            DailyWalkSet dataSet = new DailyWalkSet(
+                    cursor.getLong(cursor.getColumnIndex(KEY_DATE)),
+                    cursor.getInt(cursor.getColumnIndex(KEY_STEPS))
+            );
+            data.add(dataSet);
+        }
+
+        cursor.close();
+        return data;
+    }
+
 
     public static long getToday() {
         Calendar calendar = Calendar.getInstance();
@@ -98,6 +120,6 @@ public class DataBase extends SQLiteOpenHelper {
     }
 
     public static String getTimeString(long date) {
-        return new SimpleDateFormat("yyyyMMdd").format(date);
+        return new SimpleDateFormat("yyyy/MM/dd").format(date);
     }
 }
